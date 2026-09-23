@@ -1,0 +1,313 @@
+local playerMove = game.ReplicatedStorage.playerMove
+local startRoll = game.ReplicatedStorage.startRoll
+local displayRoll = game.ReplicatedStorage.displayRoll
+local moveResult = game.ReplicatedStorage.moveResult
+local playerMovement = require(game.ServerStorage.playerMovement)
+local endMovement = game.ReplicatedStorage.endMovement
+local endRoll = game.ReplicatedStorage.endRoll
+local endTurnEvent = game.ReplicatedStorage.endTurnEvent
+local startTurn = game.ReplicatedStorage.startTurn
+local contRollEvent = game.ReplicatedStorage.contRollEvent
+local endRollEvent  = game.ReplicatedStorage.endRoll
+local turnInfo = require(game.ServerStorage.turnInfo)
+local buyShopEvent = game.ReplicatedStorage.buyShopEvent
+local denyShopEvent = game.ReplicatedStorage.denyShopEvent
+local requestPlayerList = game.ReplicatedStorage.requestPlayerList
+local hostClientAppointment = game.ReplicatedStorage.remoteEvents.hostClientAppointment
+local startGameEvent = game.ReplicatedStorage.remoteEvents.startGameEvent
+
+local mapSpaces = game.Workspace:WaitForChild("Fortunate Street").Assets.pirateShipMap
+local mapData = require(game.ReplicatedStorage.mapInfo.pirateShipMap)
+local shopModel = game.ServerStorage:WaitForChild("shopModel")
+local promotionEvent = game.ReplicatedStorage.remoteEvents.promotionEvent
+local propertyScript = game.ServerStorage:WaitForChild("propertyScript")
+
+local districtColors = {
+	a = Color3.fromRGB(255, 0, 0),
+	b = Color3.fromRGB(110, 153, 202),
+	c = Color3.fromRGB(226, 155, 64),
+	d = Color3.fromRGB(75, 151, 75),
+	e = Color3.fromRGB(0, 32, 96),
+	f = Color3.fromRGB(255, 152, 220),
+}
+local plrList = {}
+local numberOfPlayers = 0
+local currentTurn = 1
+local currentPlayer = plrList[1]
+local firstLocation = true
+local previousLocations = {}
+local initialLocation = nil
+local playerColors = {
+	Color3.fromRGB(170, 0, 0),
+	Color3.fromRGB(0, 0, 255),
+	Color3.fromRGB(0, 255, 0),
+	Color3.fromRGB(128, 0, 128),
+}
+
+local plrTurn = Instance.new("StringValue")
+plrTurn.Parent = game.Workspace
+plrTurn.Name = "plrTurn"
+plrTurn.Value = "nil"
+
+
+
+
+
+--Notifys server when player is added, connects core values to the game to the player
+game.Players.PlayerAdded:Connect(function(plr)
+	local leaderstats = Instance.new("Folder")
+	leaderstats.Parent = plr
+	leaderstats.Name = "leaderstats"
+	
+	local assets = Instance.new("Folder")
+	assets.Parent = plr
+	assets.Name = "assets"
+
+	local properties = Instance.new("Folder")
+	properties.Parent = plr
+	properties.Name = "Properties"
+	
+	local thisTurnSuites = Instance.new("Folder")
+	thisTurnSuites.Parent = plr
+	thisTurnSuites.Name = "currentTurnSuites"
+	
+	local plrSuites = Instance.new("Folder")
+	plrSuites.Parent = plr
+	plrSuites.Name = "plrSuites"
+	
+	local networth = Instance.new("IntValue")
+	networth.Parent = assets
+	networth.Name = "netWorth"
+	networth.Value = 1200
+	
+	local readyCash = Instance.new("IntValue")
+	readyCash.Parent = assets
+	readyCash.Name = "readyCash"
+	readyCash.Value = 1200
+	
+	local plrLevel = Instance.new("IntValue")
+	plrLevel.Parent = plr
+	plrLevel.Name = "plrLevel"
+	plrLevel.Value = 1
+	
+	local plrTurnInfo = Instance.new("Folder")
+	plrTurnInfo.Parent = plr
+	plrTurnInfo.Name = "plrTurnInfo"
+	
+	local plrRoll = Instance.new("IntValue")
+	plrRoll.Parent = plrTurnInfo
+	plrRoll.Name = "playerRoll"
+	plrRoll.Value = 0
+	
+	local plrDirection = Instance.new("StringValue")
+	plrDirection.Parent = plrTurnInfo
+	plrDirection.Name = "plrDirection"
+	plrDirection.Value = "forward"
+	
+	local plrInitialLocation = Instance.new("StringValue")
+	plrInitialLocation.Parent = plrTurnInfo
+	plrInitialLocation.Name = "plrInitialLocation"
+	plrInitialLocation.Value = "bankSquare"
+	
+	local plrLastLocation = Instance.new("StringValue")
+	plrLastLocation.Parent = plrTurnInfo
+	plrLastLocation.Name = "plrLastLocation"
+	plrLastLocation.Value = "bankSquare"
+	
+	--local plrTurn = Instance.new("BoolValue")
+	--plrTurn.Parent = plrTurnInfo
+	--plrTurn.Value = false
+	
+	local plrSpace = Instance.new("StringValue")
+	plrSpace.Parent = plrTurnInfo
+	plrSpace.Name = "plrSpace"
+	plrSpace.Value = "bankSquare"
+
+
+	
+	if numberOfPlayers == 0 then
+		currentPlayer = plr
+		hostClientAppointment:FireClient(plr)
+	end
+	
+	numberOfPlayers += 1
+	print(numberOfPlayers)
+	
+	--playerList[numberOfPlayers] = plr
+	table.insert(plrList, plr)
+	
+	print (plrList)
+	
+	local color = Instance.new("Color3Value")
+	color.Parent = plr
+	color.Name = "plrColor"
+	color.Value = playerColors[numberOfPlayers]
+	
+	local netWorth = plr.assets.netWorth
+	local readyCash = plr.assets.readyCash
+	local properties = plr.Properties
+	readyCash.Changed:Connect(function(newValue)
+		local propertyValue = turnInfo.getPlrTotalPropertyValue(plr)
+		print(propertyValue)
+		netWorth.Value = newValue + propertyValue
+	end)
+
+
+end)
+
+--Movement of player server script below, local script dictates when player gets to move (Not very secure but for now this is good)
+
+requestPlayerList.OnServerInvoke = function()
+	return plrList
+end
+
+--for spaceName, spaceData in pairs(mapData.spaces) do
+--	if spaceData.type == "shop" then
+--		local anchor = mapSpaces:FindFirstChild(spaceName)
+--		if anchor then
+--			local clone = shopModel:Clone()
+--			clone.Parent = mapSpaces
+--			clone.Name = spaceName
+--			clone:SetPrimaryPartCFrame(anchor.CFrame)
+--			clone:SetAttribute("propertyValue", spaceData.value)
+--			local district = spaceData.district
+--			if district and districtColors[district] then
+--				clone:SetAttribute("district", district)
+--				for _, part in ipairs(clone.border:GetChildren()) do
+--					part.Color = districtColors[district]
+--				end
+--			end
+
+--			local scriptClone = propertyScript:Clone()
+--			scriptClone.Parent = clone
+
+--			anchor.Transparency = 1
+--			anchor.CanCollide = false
+--			anchor:Destroy()
+--		end
+--	end
+--end
+--for spaceName, spaceData in pairs(mapData.spaces) do
+--	if spaceData.type == "suit" or spaceData.type == "bankSquare" or spaceData.type == "arcade" or spaceData.type == "ventureCard" or spaceData.type == "rollOn" or spaceData.type == "takeABreak" or spaceData.type == "boonSquare" then
+--		local anchor = mapSpaces:FindFirstChild(spaceName)
+--		if anchor then
+--			print(spaceName)
+--			local clone = game.ServerStorage:FindFirstChild(spaceName):Clone()
+--			clone.Parent = mapSpaces
+--			clone.Name = spaceName
+--			clone:SetPrimaryPartCFrame(anchor.CFrame)
+
+
+--			anchor.Transparency = 1
+--			anchor.CanCollide = false
+--			anchor:Destroy()
+--		end
+--	end
+--end
+
+
+
+local function moveSuites(plr)
+	for _, suit in ipairs(plr.currentTurnSuites:GetChildren()) do
+		local clone = suit:Clone()
+		clone.Parent = plr.plrSuites
+	end
+	plr.currentTurnSuites:ClearAllChildren()
+end
+playerMove.OnServerEvent:Connect(function(plr, input)
+	local playerRoll = plr.plrTurnInfo.playerRoll.Value
+	if playerRoll > 0 then
+		if firstLocation then
+			plr.plrTurnInfo.plrInitialLocation.Value = plr.plrTurnInfo.plrSpace.Value
+			firstLocation = false	
+			playerMovement.location(plr, input)
+		else
+			playerMovement.location(plr, input)
+		end
+		
+		if plr.plrTurnInfo.playerRoll.Value == 0 then
+			endMovement:FireClient(plr)
+		end
+	end
+	
+end)
+
+
+startGameEvent.OnServerEvent:Connect(function(plr)
+	if #plrList > 0 then
+		local firstPlayer = math.random(1, #plrList)
+		game.Workspace.plrTurn.Value = plrList[firstPlayer].Name
+		print(plrList[firstPlayer])
+		startTurn:FireClient(plrList[firstPlayer])
+		currentPlayer = plrList[firstPlayer]
+		currentTurn = firstPlayer
+
+	end
+	
+	
+end)
+
+contRollEvent.OnServerEvent:Connect(function(plr)
+	plr.plrTurnInfo.playerRoll.Value += 1
+	playerMovement.oneBackward(plr)
+end)
+
+startRoll.OnServerEvent:Connect(function(plr)
+	local roll = math.random(1,6)
+	plr.plrTurnInfo.playerRoll.Value = roll
+	print(roll)
+	displayRoll:FireClient(plr, roll)
+	
+	
+end)
+
+endRollEvent.OnServerEvent:Connect(function(plr)
+	moveSuites(plr)
+	
+	task.wait(1)
+	local type = turnInfo.checkType(plr)
+	print(type)
+	if type == "shop" then
+		print("startingFunction")
+		local complete = turnInfo.shop(plr)
+		if complete == false then
+			endTurn(plr)
+		end
+	else
+		endTurn(plr)
+	end
+end)
+
+buyShopEvent.OnServerEvent:Connect(function(plr)
+	if currentPlayer then
+		local complete = turnInfo.buyShop(plr)
+		if complete then
+			endTurn(plr)
+		end
+	end
+end)
+
+
+denyShopEvent.OnServerEvent:Connect(function(plr)
+	endTurn(plr)
+end)
+
+function endTurn(plr)
+	
+	
+	endTurnEvent:FireClient(currentPlayer)
+	
+	if (plrList[currentTurn + 1]) then
+		currentTurn += 1		
+	else
+		currentTurn = 1
+		currentPlayer = plrList[currentTurn]
+	end
+	firstLocation = true
+	currentPlayer = plrList[currentTurn]
+	print(currentPlayer)
+	startTurn:FireClient(currentPlayer)
+
+end
+	
+	
