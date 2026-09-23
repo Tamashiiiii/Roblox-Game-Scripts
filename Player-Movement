@@ -1,0 +1,257 @@
+local move = {}
+	local mapSpaces = game.Workspace:WaitForChild("Fortunate Street").Assets.pirateShipMap
+	local mapData = require(game.ReplicatedStorage.mapInfo.pirateShipMap)
+	local playerMove = game.ReplicatedStorage.playerMove
+	local displayRoll = game.ReplicatedStorage.displayRoll
+	local promotionEvent = game.ReplicatedStorage.remoteEvents.promotionEvent
+	local moneyTransfer = require(game.ServerStorage.moneyTransfer)
+	local turnInfo = require(game.ServerStorage.turnInfo)
+
+	local function isForward(space, input)
+		print("Forward started!")
+		for _, key in ipairs(space.forwardKeys) do
+			if key == input then
+				print("returning true!")
+				return true
+			end
+		end
+		return false
+	end
+	
+	local function isBackward(space, input)
+		for _, key in ipairs(space.backwardKeys) do
+			if key == input then
+				return true
+			end
+		end
+		return false
+	end
+	
+	local function isForwardA(space, input)
+		print("Forward started!")
+		for _, key in ipairs(space.forwardAKeys) do
+			if key == input then
+				print("returning true!")
+				return true
+			end
+		end
+		return false
+	end
+	
+	local function isForwardB(space, input)
+		print("Forward started!")
+		for _, key in ipairs(space.forwardBKeys) do
+			if key == input then
+				print("returning true!")
+				return true
+			end
+		end
+		return false
+	end
+	
+	local function isBackwardA(space, input)
+		print("Forward started!")
+		for _, key in ipairs(space.backwardAKeys) do
+			if key == input then
+				print("returning true!")
+				return true
+			end
+		end
+		return false
+	end
+	
+	local function isBackwardB(space, input)
+		print("backward started!")
+		for _, key in ipairs(space.backwardBKeys) do
+			if key == input then
+				print("returning true!")
+				return true
+			end
+		end
+		return false
+	end
+	
+	local function getNextSpacePart(plr, nextSpaceName)
+		local nextSpacePart = mapSpaces:FindFirstChild(nextSpaceName):FindFirstChild("center")
+		if nextSpacePart then 
+			--print(currentSpaceName)
+			plr.plrTurnInfo.plrSpace.Value = nextSpaceName
+			return nextSpacePart.Position
+		end
+		
+	end
+		
+	local function initialLocation(plr)
+		local currentSpaceName = plr.plrTurnInfo.plrSpace.Value
+		local currentSpacePart = mapSpaces:FindFirstChild(currentSpaceName):FindFirstChild("center")
+		return currentSpacePart.Position
+	end
+
+
+	local function suitCheckerForward(plr, nextSpaceName)
+		if nextSpaceName == "spadeSuit" or nextSpaceName == "clubSuit" or nextSpaceName == "diamondSuit" or nextSpaceName == "heartSuit" then
+			local newSuit = Instance.new("StringValue")
+			newSuit.Parent = plr.currentTurnSuites
+			newSuit.Name = nextSpaceName
+			newSuit.Value = nextSpaceName
+			print(newSuit)
+		end
+	end
+	
+	local function suitCheckerBackward(plr, currentSpaceName)
+	if currentSpaceName == "spadeSuit" or currentSpaceName == "clubSuit" or currentSpaceName == "diamondSuit" or currentSpaceName == "heartSuit" then
+			plr.currentTurnSuites:FindFirstChild(currentSpaceName):Destroy()
+		end
+	end
+
+	local function bankChecker(plr, nextSpaceName)
+		print("bank Checker")
+		if nextSpaceName == "bankSquare" then
+			print("starting promotion")
+			turnInfo.bankPromotion(plr)
+		end
+		
+	end
+	
+	function move.location(plr, input)
+		--print("recieved input")
+		local currentSpaceName = plr.plrTurnInfo.plrSpace.Value
+		local currentSpace = mapData.spaces[currentSpaceName]
+		plr.plrTurnInfo.plrLastLocation.Value = currentSpaceName
+		if currentSpaceName == "arcadeSquare" then
+			print("arcade square direction change")
+			plr.plrTurnInfo.plrDirection.Value = "backward"
+			
+		elseif currentSpaceName == "bankSquare" then
+			print("bank square direction change")
+			plr.plrTurnInfo.plrDirection.Value = "forward"
+		end
+		local hrp = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
+		if currentSpace.forward then
+			if plr.plrTurnInfo.plrDirection.Value == "forward" then
+				if isForward(currentSpace, input) then
+					local nextSpaceName = mapData.spaces[currentSpaceName]["forward"]
+					if nextSpaceName then
+						if nextSpaceName ~= plr.plrTurnInfo.plrInitialLocation.Value then
+							--print("nextSpaceName verified!")
+							local nextSpaceForward = getNextSpacePart(plr, nextSpaceName)
+							suitCheckerForward(plr, nextSpaceName)
+							bankChecker(plr, nextSpaceName)
+							plr.plrTurnInfo.playerRoll.Value -= 1
+							move.plr(plr, hrp, nextSpaceForward)
+						end
+					end
+				elseif isBackward(currentSpace, input) then
+					local nextSpaceName = mapData.spaces[currentSpaceName]["backward"]
+					if nextSpaceName then
+						local currentSpaceName = plr.plrTurnInfo.plrSpace.Value
+						if currentSpaceName ~= plr.plrTurnInfo.plrInitialLocation.Value then
+							local nextSpaceBackward = getNextSpacePart(plr, nextSpaceName)
+							suitCheckerBackward(plr, currentSpaceName)
+							plr.plrTurnInfo.playerRoll.Value += 1
+							move.plr(plr, hrp, nextSpaceBackward)
+						end
+					end
+				end
+			elseif plr.plrTurnInfo.plrDirection.Value == "backward" then
+				if isForward(currentSpace, input) then
+					local nextSpaceName = mapData.spaces[currentSpaceName]["forward"]
+					if nextSpaceName then
+						local currentSpaceName = plr.plrTurnInfo.plrSpace.Value
+						if currentSpaceName ~= plr.plrTurnInfo.plrInitialLocation.Value then
+							--print("nextSpaceName verified!")
+							local nextSpaceForward = getNextSpacePart(plr, nextSpaceName)
+							suitCheckerBackward(plr, currentSpaceName)
+							plr.plrTurnInfo.playerRoll.Value += 1
+							move.plr(plr, hrp, nextSpaceForward)
+						end
+					end
+				elseif isBackward(currentSpace, input) then
+					local nextSpaceName = mapData.spaces[currentSpaceName]["backward"]
+					if nextSpaceName then
+						local currentSpaceName = plr.plrTurnInfo.plrSpace.Value
+						if nextSpaceName ~= plr.plrTurnInfo.plrInitialLocation.Value then
+							local nextSpaceBackward = getNextSpacePart(plr, nextSpaceName)
+							suitCheckerForward(plr, nextSpaceName)
+							bankChecker(plr, nextSpaceName)
+							plr.plrTurnInfo.playerRoll.Value -= 1
+							move.plr(plr, hrp, nextSpaceBackward)
+						end
+					end
+				end
+			end
+		end
+		
+		
+		if plr.plrTurnInfo.plrDirection.Value == "forward" then
+			if currentSpace.forwardA then
+				if isForwardA(currentSpace, input) then
+					print("past if forwardA!")
+					local nextSpaceName = mapData.spaces[currentSpaceName]["forwardA"]
+					if nextSpaceName then
+						print("nextSpaceName verified!")
+						local nextSpaceForward = getNextSpacePart(plr, nextSpaceName)
+						plr.plrTurnInfo.playerRoll.Value -= 1
+						move.plr(plr, hrp, nextSpaceForward)		
+					end
+				elseif isForwardB(currentSpace, input) then
+					print("past if forwardB!")
+					local nextSpaceName = mapData.spaces[currentSpaceName]["forwardB"]
+					if nextSpaceName then
+						print("nextSpaceName verified!")
+						local nextSpaceForward = getNextSpacePart(plr, nextSpaceName)
+						plr.plrTurnInfo.playerRoll.Value -= 1
+						move.plr(plr, hrp, nextSpaceForward)		
+					end
+				else
+					return
+				end	
+			end
+			
+		elseif plr.plrTurnInfo.plrDirection.Value == "backward" then
+			if currentSpace.backwardA then
+				if isBackwardA(currentSpace, input) then
+					print("past if backwardA!")
+					local nextSpaceName = mapData.spaces[currentSpaceName]["backwardA"]
+					if nextSpaceName then
+						--print("nextSpaceName verified!")
+						local nextSpaceForward = getNextSpacePart(plr, nextSpaceName)
+						plr.plrTurnInfo.playerRoll.Value -= 1
+						move.plr(plr, hrp, nextSpaceForward)		
+					end
+				elseif isBackwardB(currentSpace, input) then
+					print("past if backwardB!")
+					local nextSpaceName = mapData.spaces[currentSpaceName]["backwardB"]
+					if nextSpaceName then
+						--print("nextSpaceName verified!")
+						local nextSpaceForward = getNextSpacePart(plr, nextSpaceName)
+						plr.plrTurnInfo.playerRoll.Value -= 1
+						move.plr(plr, hrp, nextSpaceForward)		
+					end
+				else
+					return
+				end	
+			end
+			
+		end
+	end
+	
+	function move.oneBackward(plr)
+		local lastSpaceName = plr.plrTurnInfo.plrLastLocation.Value
+		local hrp = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
+		if hrp then
+			local lastSpacePosition = getNextSpacePart(plr, lastSpaceName)	
+			move.plr(plr, hrp, lastSpacePosition)
+		end
+	end
+
+	function move.plr(plr, hrp, location)
+		print(hrp)
+		hrp.CFrame = CFrame.new(location) + Vector3.new(0, 4.5, 0)
+		local playerRoll = plr.plrTurnInfo.playerRoll.Value
+		displayRoll:FireAllClients(playerRoll)
+		
+	end
+	
+return move
+
