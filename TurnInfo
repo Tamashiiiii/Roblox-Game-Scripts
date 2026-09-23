@@ -1,0 +1,101 @@
+local turnInfo = {}
+	local mapSpaces = game.Workspace:WaitForChild("Fortunate Street").Assets.pirateShipMap
+	local moneyTransfer = require(game.ServerStorage.moneyTransfer)
+	local playerMove = game.ReplicatedStorage.playerMove
+	local displayRoll = game.ReplicatedStorage.displayRoll
+	local buyShopEvent = game.ReplicatedStorage.buyShopEvent
+	local promotionEvent = game.ReplicatedStorage.remoteEvents.promotionEvent
+	
+	
+	function turnInfo.checkType(plr)
+		local currentSpaceName = plr.plrTurnInfo.plrSpace.Value
+		local currentSpace = mapSpaces:FindFirstChild(currentSpaceName)
+		local type = currentSpace:GetAttribute("type")
+		return type
+	end
+		
+	local function getShopValue(plr)
+		local currentSpaceName = plr.plrTurnInfo.plrSpace.Value
+		local currentSpace = mapSpaces:FindFirstChild(currentSpaceName)
+		local propertyValue = currentSpace:GetAttribute("propertyValue")
+		return propertyValue		
+	end
+	
+	function turnInfo.shop(plr)
+		local currentSpaceName = plr.plrTurnInfo.plrSpace.Value
+		local currentSpace = mapSpaces:FindFirstChild(currentSpaceName)
+		local propertyValue = currentSpace:GetAttribute("propertyValue")
+		local salePrice = currentSpace:GetAttribute("salePrice")
+		local ownedBy = currentSpace:GetAttribute("ownedBy")
+		print("in function")
+		if ownedBy == "bank" then
+			print("found owner is equal to bank")
+			local propertyValue = getShopValue(plr)
+			buyShopEvent:FireClient(plr, propertyValue)
+			if plr.assets.readyCash.Value >= propertyValue then
+				return true
+			else
+				print("brokie!")
+				return false
+			end
+		elseif ownedBy == plr.Name then
+			print("found owner is equal to player")
+			print("player already owns this property")
+			return false
+		else
+			print("found owner is equal to someone else")
+			print("player does not own this property")
+			local ownerPlr = game.Players:FindFirstChild(ownedBy)
+			if ownerPlr then
+			moneyTransfer.transfer(plr, ownerPlr, salePrice)	
+			end
+			return false
+		end
+	
+	end
+	
+	function turnInfo.buyShop(plr)
+		local currentSpaceName = plr.plrTurnInfo.plrSpace.Value
+		local currentSpace = mapSpaces:FindFirstChild(currentSpaceName)
+		local propertyValue = currentSpace:GetAttribute("propertyValue")
+		moneyTransfer.bankTransfer(plr, propertyValue)
+		currentSpace:SetAttribute("ownedBy", plr.Name)
+		local newProperty = Instance.new("StringValue")
+		newProperty.Parent = plr.Properties
+		newProperty.Name = currentSpaceName
+		newProperty.Value = propertyValue
+		print("bought shop")
+		return true
+	end
+	
+	function turnInfo.getPlrTotalPropertyValue(plr)
+		local propertyTotal = 0
+		for _, property in ipairs(plr.Properties:GetChildren()) do
+			local foundProperty = mapSpaces:FindFirstChild(property.Name)
+			if foundProperty then
+				print("foundProperty")
+				local propertyValue = foundProperty:GetAttribute("propertyValue")
+				propertyTotal += propertyValue
+			end
+			print(propertyTotal)
+		end
+		return propertyTotal
+		
+	end
+	
+	function turnInfo.bankPromotion(plr)
+		print("bank promo intiated")
+		local totalPropertyValue = turnInfo.getPlrTotalPropertyValue(plr)
+		local baseSalary = (plr.plrLevel.Value - 1) * 100 + 250
+		local promotionalBonus = 150 * plr.plrLevel.Value
+		local shopBonus = totalPropertyValue * 0.10
+		local totalSalary = baseSalary + promotionalBonus + shopBonus
+		print(totalSalary)
+		
+		promotionEvent:FireAllClients(baseSalary, promotionalBonus, shopBonus, totalSalary)
+		moneyTransfer.bankPay(plr, totalSalary)
+		
+		plr.plrLevel.Value = plr.plrLevel.Value + 1
+	end
+	
+return turnInfo
